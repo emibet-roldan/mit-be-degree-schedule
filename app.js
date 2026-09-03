@@ -26,7 +26,9 @@ const COURSES = [
 
 const SEMESTERS=['Fall 2026','Spring 2027','Fall 2027','Spring 2028','Fall 2028','Spring 2029','Fall 2029','Spring 2030'];
 const initialPlan={}; SEMESTERS.forEach(s=>initialPlan[s]=[]);
-let state=JSON.parse(localStorage.getItem('mitBEPlanner')||'null')||{plan:initialPlan,completed:[],transferred:[]};
+const emptyState=()=>({plan:Object.fromEntries(SEMESTERS.map(s=>[s,[]])),completed:[],transferred:[],creditBuckets:{HASS:0,'Restricted Elective':0,Unrestricted:0,'BE Core':0,GIR:0,Concentration:0},hassDist:{A:0,H:0,S:0},ci:{H:0,HW:0,M:0},customCredits:[]});
+let state=JSON.parse(localStorage.getItem('mitBEPlanner')||'null')||emptyState();
+state.creditBuckets ||= {}; state.hassDist ||= {A:0,H:0,S:0}; state.ci ||= {H:0,HW:0,M:0}; state.customCredits ||= [];
 
 function save(){localStorage.setItem('mitBEPlanner',JSON.stringify(state));}
 function course(id){return COURSES.find(c=>c.id===id)}
@@ -34,15 +36,15 @@ function completedSet(){return new Set([...state.completed,...state.transferred]
 function prereqsMet(c){return c.pre.every(p=>completedSet().has(p))}
 function isTaken(id){return Object.values(state.plan).flat().includes(id)||state.completed.includes(id)||state.transferred.includes(id)}
 function semesterType(s){return s.startsWith('Fall')?'Fall':'Spring'}
+function bucketUnits(name){return (state.creditBuckets[name]||0)+COURSES.filter(c=>c.req===name&&(state.completed.includes(c.id)||state.transferred.includes(c.id))).reduce((a,c)=>a+c.units,0)}
 
-function render(){renderStats();renderPlan();renderAvailable();renderReq();}
+function render(){renderStats();renderPlan();renderAvailable();renderReq();renderCredits();renderCI();}
 function renderStats(){
  const all=COURSES.filter(c=>!['HASS','UE','RE'].includes(c.id));
- const done=state.completed.length+state.transferred.length;
- const pct=Math.min(100,Math.round(done/Math.max(1,all.length)*100));
+ const done=state.completed.length+state.transferred.length+state.customCredits.length;
+ const pct=Math.min(100,Math.round(done/Math.max(1,all.length+8)*100));
  document.getElementById('overallPct').textContent=pct+'%';
- const counts={}; COURSES.forEach(c=>counts[c.req]=(counts[c.req]||0)+(state.completed.includes(c.id)||state.transferred.includes(c.id)?c.units:0));
- document.getElementById('stats').innerHTML=`<div class="stat"><b>${done}</b><span>courses satisfied</span></div><div class="stat"><b>${counts['BE Core']||0}</b><span>BE Core units</span></div><div class="stat"><b>${counts.HASS||0}</b><span>HASS units</span></div><div class="stat"><b>${counts['Restricted Elective']||0}</b><span>restricted elective units</span></div>`;
+ document.getElementById('stats').innerHTML=`<div class="stat"><b>${done}</b><span>credits recorded</span></div><div class="stat"><b>${bucketUnits('BE Core')}</b><span>BE Core units</span></div><div class="stat"><b>${bucketUnits('HASS')}</b><span>HASS units</span></div><div class="stat"><b>${bucketUnits('Restricted Elective')}</b><span>restricted elective units</span></div>`;
 }
 function renderPlan(){
  const years={2026:[SEMESTERS[0],SEMESTERS[1]],2027:[SEMESTERS[2],SEMESTERS[3]],2028:[SEMESTERS[4],SEMESTERS[5]],2029:[SEMESTERS[6],SEMESTERS[7]]};
@@ -58,11 +60,27 @@ function openPicker(s){
 }
 function openCourse(id){const c=course(id);document.getElementById('modalContent').innerHTML=`<h2>${c.id}</h2><p><b>${c.title}</b></p><p>${c.units} units · ${c.req}</p><p>${c.pre.length?'Prerequisites: '+c.pre.join(', '):'No prerequisites in this planner.'}</p><p>${prereqsMet(c)?'✓ Prerequisites satisfied':'🔒 Prerequisites not yet satisfied'}</p><button class="primary" id="markDone">Mark completed</button><button class="ghost" id="removeCourse" style="margin-left:8px">Remove from plan</button>`;document.getElementById('modal').classList.remove('hidden');document.getElementById('markDone').onclick=()=>{state.completed=[...new Set([...state.completed,id])];Object.keys(state.plan).forEach(s=>state.plan[s]=state.plan[s].filter(x=>x!==id));save();closeModal();render()};document.getElementById('removeCourse').onclick=()=>{Object.keys(state.plan).forEach(s=>state.plan[s]=state.plan[s].filter(x=>x!==id));save();closeModal();render()}}
 function renderAvailable(){const q=(document.getElementById('courseSearch').value||'').toLowerCase();const list=COURSES.filter(c=>!isTaken(c.id)&&prereqsMet(c)&&(!q||`${c.id} ${c.title} ${c.req}`.toLowerCase().includes(q)));document.getElementById('availableGrid').innerHTML=list.map(c=>`<div class="course-card available"><span class="pill">${c.req}</span><h3>${c.id}</h3><div class="meta">${c.title} · ${c.units} units</div><div class="meta">Offered: ${c.offer.join(', ')}</div><button data-course="${c.id}">View / add</button></div>`).join('')||'<p>No currently unlocked courses match your search.</p>';document.querySelectorAll('#availableGrid [data-course]').forEach(b=>b.onclick=()=>openCourse(b.dataset.course))}
-function renderReq(){const reqs=[['BE Core',144],['HASS',96],['Restricted Elective',36],['Unrestricted',48],['Concentration',60]];document.getElementById('reqGrid').innerHTML=reqs.map(([name,total])=>{let done=COURSES.filter(c=>c.req===name&&(state.completed.includes(c.id)||state.transferred.includes(c.id))).reduce((a,c)=>a+c.units,0);let p=Math.min(100,Math.round(done/total*100));return `<div class="req-card"><h3>${name}</h3><div class="req-line"><span>${done} / ${total} units</span><b>${p}%</b></div><div class="bar"><i style="width:${p}%"></i></div></div>`}).join('')}
+function renderReq(){const reqs=[['BE Core',144],['HASS',96],['Restricted Elective',36],['Unrestricted',48],['Concentration',60]];document.getElementById('reqGrid').innerHTML=reqs.map(([name,total])=>{let done=bucketUnits(name);let p=Math.min(100,Math.round(done/total*100));return `<div class="req-card"><h3>${name}</h3><div class="req-line"><span>${done} / ${total} units</span><b>${p}%</b></div><div class="bar"><i style="width:${p}%"></i></div></div>`}).join('')}
+function renderCredits(){
+ const el=document.getElementById('creditList');
+ const specific=state.transferred.map(id=>{const c=course(id);return `<div class="credit-row"><div><b>${id}</b> — ${c.title}<span class="muted">${c.units} units · unlocks prerequisites</span></div><button class="ghost" data-remove-specific="${id}">Remove</button></div>`}).join('');
+ const custom=state.customCredits.map((x,i)=>`<div class="credit-row"><div><b>${x.name}</b><span class="muted">${x.units} units · ${x.bucket}${x.hassCat?' · HASS-'+x.hassCat:''}</span></div><button class="ghost" data-remove-custom="${i}">Remove</button></div>`).join('');
+ el.innerHTML=(specific+custom)||'<p class="muted">No transfer or external credits recorded yet.</p>';
+ document.querySelectorAll('[data-remove-specific]').forEach(b=>b.onclick=()=>{state.transferred=state.transferred.filter(x=>x!==b.dataset.removeSpecific);save();render()});
+ document.querySelectorAll('[data-remove-custom]').forEach(b=>b.onclick=()=>{state.customCredits.splice(Number(b.dataset.removeCustom),1);save();render()});
+}
+function renderCI(){const total=state.ci.H+state.ci.HW+state.ci.M;document.getElementById('ciProgress').innerHTML=`<div class="req-line"><span>CI-H</span><b>${state.ci.H} / 2</b></div><div class="req-line"><span>CI-HW</span><b>${state.ci.HW} / 2*</b></div><div class="req-line"><span>CI-M</span><b>${state.ci.M} / 2</b></div><div class="bar"><i style="width:${Math.min(100,total/4*100)}%"></i></div><small class="muted">${total} communication-intensive subjects recorded. *CI-HW is tracked separately because it affects CI-H sequencing.</small>`}
+function addCreditUI(){
+ const options=COURSES.filter(c=>!state.transferred.includes(c.id)).map(c=>`<option value="${c.id}">${c.id} — ${c.title}</option>`).join('');
+ document.getElementById('modalContent').innerHTML=`<h2>Add credit</h2><p>Choose <b>specific course credit</b> if the credit should satisfy a particular MIT subject and unlock its prerequisites. Otherwise use <b>requirement-only credit</b>.</p><label>Type<select id="creditType"><option value="specific">Specific MIT course credit</option><option value="bucket">Requirement-only credit</option></select></label><div id="creditFields"><label>MIT course<select id="creditCourse">${options}</select></label></div><button class="primary" id="saveCredit">Save credit</button>`;
+ const type=document.getElementById('creditType');type.onchange=()=>{document.getElementById('creditFields').innerHTML=type.value==='specific'?`<label>MIT course<select id="creditCourse">${options}</select></label>`:`<label>Description<input id="creditName" placeholder="e.g. Transfer HASS credit" /></label><label>Units<input id="creditUnits" type="number" min="1" value="12" /></label><label>Counts toward<select id="creditBucket"><option>HASS</option><option>Restricted Elective</option><option>Unrestricted</option><option>BE Core</option><option>GIR</option><option>Concentration</option></select></label><label>HASS Distribution (optional)<select id="hassCat"><option value="">None / HASS elective only</option><option value="A">HASS-A</option><option value="H">HASS-H</option><option value="S">HASS-S</option></select></label>`};
+ document.getElementById('saveCredit').onclick=()=>{if(type.value==='specific'){const id=document.getElementById('creditCourse').value;state.transferred.push(id)}else{const name=document.getElementById('creditName').value.trim()||'Requirement-only credit';const units=Number(document.getElementById('creditUnits').value)||0;const bucket=document.getElementById('creditBucket').value;const hassCat=document.getElementById('hassCat').value;state.creditBuckets[bucket]=(state.creditBuckets[bucket]||0)+units;if(bucket==='HASS'&&hassCat)state.hassDist[hassCat]=(state.hassDist[hassCat]||0)+1;state.customCredits.push({name,units,bucket,hassCat})}save();closeModal();render()};document.getElementById('modal').classList.remove('hidden');
+}
+document.getElementById('addCreditBtn').onclick=addCreditUI;
 function closeModal(){document.getElementById('modal').classList.add('hidden')}
 document.getElementById('closeModal').onclick=closeModal;document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.tab).classList.add('active')});
 document.getElementById('courseSearch').oninput=renderAvailable;
-document.getElementById('resetBtn').onclick=()=>{if(confirm('Reset your planner?')){state={plan:initialPlan,completed:[],transferred:[]};save();render()}};
+document.getElementById('resetBtn').onclick=()=>{if(confirm('Reset your planner?')){state=emptyState();save();render()}};
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mit-be-plan.json';a.click();};
 render();
