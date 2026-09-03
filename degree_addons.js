@@ -1,0 +1,23 @@
+// Extra degree-audit features: PE&W, swim, HASS concentration paperwork, lab and REST.
+const EXTRA_KEY='mitBEExtra';
+const extra=JSON.parse(localStorage.getItem(EXTRA_KEY)||'null')||{
+  pePoints:0, swim:false, peActivities:[], labUnits:0, restSubjects:0,
+  milestones:{concProposal:false,concCompletion:false}, totalUnits:0
+};
+function saveExtra(){localStorage.setItem(EXTRA_KEY,JSON.stringify(extra));}
+function esc(s){return String(s).replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]));}
+function extraModal(title,body,saveFn){document.getElementById('modalContent').innerHTML=`<h2>${title}</h2>${body}<button class="primary" id="extraSave">Save</button>`;document.getElementById('modal').classList.remove('hidden');document.getElementById('extraSave').onclick=()=>{saveFn();saveExtra();closeModal();renderExtras()};}
+function renderExtras(){
+ const pePct=Math.min(100,Math.round(extra.pePoints/8*100));
+ document.getElementById('peProgress').innerHTML=`<div class="req-line"><span>PE&W points</span><b>${extra.pePoints} / 8</b></div><div class="bar"><i style="width:${pePct}%"></i></div><div class="req-line"><span>Swimming requirement</span><b>${extra.swim?'✓ Complete':'○ Not completed'}</b></div><div class="muted">PE&W is tracked by points here; add each activity/course below.</div>${extra.peActivities.map((x,i)=>`<div class="credit-row"><div><b>${esc(x.name)}</b><span class="muted">${x.points} PE&W point${x.points==1?'':'s'} · ${esc(x.term||'')}</span></div><button class="ghost" data-rm-pe="${i}">Remove</button></div>`).join('')}`;
+ document.querySelectorAll('[data-rm-pe]').forEach(b=>b.onclick=()=>{extra.peActivities.splice(Number(b.dataset.rmPe),1);extra.pePoints=extra.peActivities.reduce((a,x)=>a+Number(x.points),0);saveExtra();renderExtras()});
+ document.getElementById('milestoneList').innerHTML=`<div class="credit-row"><div><b>HASS Concentration Proposal</b><span class="muted">Submit/approve your concentration proposal.</span></div><button class="ghost" data-m="concProposal">${extra.milestones.concProposal?'✓ Completed':'Mark complete'}</button></div><div class="credit-row"><div><b>HASS Concentration Completion Form</b><span class="muted">Final concentration completion paperwork.</span></div><button class="ghost" data-m="concCompletion">${extra.milestones.concCompletion?'✓ Completed':'Mark complete'}</button></div><div class="credit-row"><div><b>Laboratory Requirement</b><span class="muted">${extra.labUnits} / 12 units</span></div><button class="ghost" id="labBtn">Edit</button></div><div class="credit-row"><div><b>REST Requirement</b><span class="muted">${extra.restSubjects} / 2 subjects</span></div><button class="ghost" id="restBtn">Edit</button></div>`;
+ document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{extra.milestones[b.dataset.m]=!extra.milestones[b.dataset.m];saveExtra();renderExtras()});
+ document.getElementById('labBtn').onclick=()=>extraModal('Laboratory requirement',`<label>Lab units credited<input id="xLab" type="number" min="0" max="12" value="${extra.labUnits}"></label>`,()=>extra.labUnits=Number(document.getElementById('xLab').value)||0);
+ document.getElementById('restBtn').onclick=()=>extraModal('REST requirement',`<label>REST subjects completed<input id="xRest" type="number" min="0" max="2" value="${extra.restSubjects}"></label>`,()=>extra.restSubjects=Number(document.getElementById('xRest').value)||0);
+}
+document.getElementById('addPEBtn').onclick=()=>extraModal('Add PE / wellness activity',`<label>Activity or course<input id="peName" placeholder="e.g. Swimming, tennis, fitness"></label><label>PE&W points<input id="pePts" type="number" min="0.5" step="0.5" value="1"></label><label>Term<input id="peTerm" placeholder="Fall 2026"></label>`,()=>{const points=Number(document.getElementById('pePts').value)||0;extra.peActivities.push({name:document.getElementById('peName').value||'PE&W activity',points,term:document.getElementById('peTerm').value});extra.pePoints=extra.peActivities.reduce((a,x)=>a+Number(x.points),0)});
+document.getElementById('peProgress').addEventListener('click',()=>{});
+// Swim toggle is placed in the PE card as a simple checkbox-style control.
+const swimBtn=document.createElement('button');swimBtn.className='ghost';swimBtn.textContent='Mark swimming requirement complete';swimBtn.onclick=()=>{extra.swim=!extra.swim;saveExtra();renderExtras()};document.getElementById('peProgress').parentElement.appendChild(swimBtn);
+renderExtras();
