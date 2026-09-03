@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIT BE Degree Planner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mit">MIT</span><span>Biological Engineering</span></div>
+    <div class="header-actions"><button id="resetBtn" class="ghost">Reset</button><button id="exportBtn" class="primary">Export Plan</button></div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div><p class="eyebrow">PERSONAL DEGREE PLANNER</p><h1>Your MIT degree, at a glance.</h1><p class="sub">Plan semesters, mark courses complete, and see what becomes available as you progress.</p></div>
+      <div class="progress-ring"><span id="overallPct">0%</span><small>overall</small></div>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="plan">4-Year Plan</button>
+      <button class="tab" data-tab="available">What Can I Take?</button>
+      <button class="tab" data-tab="requirements">Requirements</button>
+    </div>
+
+    <section id="plan" class="tab-panel active"><div id="years"></div></section>
+    <section id="available" class="tab-panel"><div class="section-head"><div><h2>What can I take?</h2><p>Courses unlock when their prerequisites are satisfied.</p></div><input id="courseSearch" class="search" placeholder="Search course or title..." /></div><div id="availableGrid" class="course-grid"></div></section>
+    <section id="requirements" class="tab-panel"><div class="section-head"><div><h2>Degree requirements</h2><p>Track the major buckets separately from your semester plan.</p></div></div><div id="reqGrid" class="req-grid"></div></section>
+  </main>
+
+  <div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="close">×</button><div id="modalContent"></div></div></div>
+  <script src="app.js"></script>
+</body>
+</html>
